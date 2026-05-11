@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>전남아이모두 학생 계정 찾기</title>
+    
+    <!-- 1. Tailwind CSS (디자인용) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- 2. Lucide Icons (아이콘용) -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <!-- 3. 커스텀 애니메이션 -->
+    <style>
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fade-in {
+            animation: fadeIn 0.4s ease-out forwards;
+        }
+        body { font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, 'Helvetica Neue', 'Segoe UI', 'Apple SD Gothic Neo', 'Noto Sans KR', 'Malgun Gothic', sans-serif; }
+    </style>
+</head>
+<body class="min-h-screen bg-gray-50 flex flex-col items-center py-10 px-4">
+
+    <!-- 팝업 공지사항 -->
+    <div id="noticeModal" class="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center p-4 z-50 transition-opacity">
+        <div class="bg-white rounded-2xl shadow-xl max-w-md w-full overflow-hidden transform transition-all">
+            <div class="bg-blue-600 p-4 text-center">
+                <i data-lucide="alert-circle" class="w-12 h-12 text-white mx-auto mb-2"></i>
+                <h2 class="text-xl font-bold text-white">비밀번호 초기화 안내</h2>
+            </div>
+            <div class="p-6">
+                <ul class="space-y-4 text-gray-700">
+                    <li class="flex items-start">
+                        <i data-lucide="check-circle-2" class="w-5 h-5 text-blue-500 mr-2 flex-shrink-0 mt-0.5"></i>
+                        <p>비밀번호 초기화 시, 학생들의 비밀번호는 <strong class="text-blue-600">[아이디+!@#]</strong>으로 설정됩니다.<br/><span class="text-sm text-gray-500">(예: 아이디가 hong123 이면 hong123!@#)</span></p>
+                    </li>
+                    <li class="flex items-start">
+                        <i data-lucide="lock" class="w-5 h-5 text-red-500 mr-2 flex-shrink-0 mt-0.5"></i>
+                        <p class="text-red-600 font-medium">주의: 시스템 자동 변경이 아닌 선생님이 직접 변경하므로 <br/><strong>완료되기까지 시간이 소요될 수 있습니다.</strong></p>
+                    </li>
+                </ul>
+                <button onclick="document.getElementById('noticeModal').classList.add('hidden')" class="mt-6 w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl transition duration-200">
+                    네, 확인했습니다
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 로딩 화면 (초기) -->
+    <div id="loadingScreen" class="flex-col items-center justify-center flex mt-20">
+        <i data-lucide="loader-2" class="w-10 h-10 text-blue-600 animate-spin mb-4"></i>
+        <p class="text-gray-600 font-medium">스프레드시트에서 학생 데이터를 불러오는 중입니다...</p>
+    </div>
+
+    <!-- 에러 화면 -->
+    <div id="errorScreen" class="hidden bg-white p-8 rounded-2xl shadow text-center max-w-md w-full mt-20 border border-red-100">
+        <i data-lucide="alert-circle" class="w-12 h-12 text-red-500 mx-auto mb-4"></i>
+        <h2 class="text-xl font-bold text-gray-800 mb-2">데이터를 불러올 수 없습니다</h2>
+        <p class="text-gray-600 text-sm mb-4">스프레드시트 링크가 잘못되었거나 형식이 맞지 않습니다.</p>
+    </div>
+
+    <!-- 메인 앱 화면 -->
+    <div id="mainApp" class="hidden max-w-md w-full bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden relative">
+        
+        <!-- 데이터 로드 성공 표시 -->
+        <div class="absolute top-4 right-4 bg-green-500/20 text-green-100 text-[10px] px-2 py-1 rounded-full font-medium flex items-center">
+            <i data-lucide="link" class="w-3 h-3 mr-1"></i>
+            DB 연동됨 (<span id="studentCount">0</span>명)
+        </div>
+
+        <div class="bg-gradient-to-r from-blue-600 to-indigo-700 p-6 text-center">
+            <h1 class="text-2xl font-extrabold text-white mt-4">전남아이모두</h1>
+            <p class="text-blue-100 mt-1">학생 계정 찾기 및 잠금 해제 요청</p>
+        </div>
+
+        <div class="p-6">
+            <form id="searchForm" class="space-y-4">
+                <div class="grid grid-cols-3 gap-3">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">학년</label>
+                        <input type="number" id="inputGrade" placeholder="예: 1" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition" required>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">반</label>
+                        <input type="number" id="inputClassNum" placeholder="예: 2" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition" required>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">번호</label>
+                        <input type="number" id="inputStudentNum" placeholder="예: 15" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition" required>
+                    </div>
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">이름</label>
+                    <input type="text" id="inputName" placeholder="학생 이름 입력" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition" required>
+                </div>
+
+                <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg flex items-center justify-center transition duration-200 mt-2">
+                    <i data-lucide="search" class="w-5 h-5 mr-2"></i>
+                    내 계정 찾기
+                </button>
+            </form>
+
+            <!-- 검색 실패 -->
+            <div id="resultNotFound" class="hidden mt-6 p-4 bg-red-50 text-red-700 rounded-lg flex items-start border border-red-100">
+                <i data-lucide="info" class="w-5 h-5 mr-2 flex-shrink-0 mt-0.5"></i>
+                <p class="text-sm">입력하신 정보와 일치하는 계정을 찾을 수 없습니다. 학년, 반, 번호, 이름을 다시 확인해주세요.</p>
+            </div>
+
+            <!-- 검색 성공 -->
+            <div id="resultFound" class="hidden mt-6 animate-fade-in">
+                <div class="p-5 bg-green-50 border border-green-200 rounded-lg text-center">
+                    <p class="text-gray-600 text-sm mb-1"><span id="resName" class="font-bold text-gray-800"></span> 학생의 아이디는</p>
+                    <p id="resId" class="text-2xl font-bold text-green-700 break-all"></p>
+                    <p class="text-gray-600 text-sm mt-1">입니다.</p>
+                </div>
+
+                <div class="mt-6 border-t border-gray-200 pt-6">
+                    <h3 class="font-semibold text-gray-800 mb-2 flex items-center">
+                        <i data-lucide="lock" class="w-4 h-4 mr-1 text-gray-600"></i>
+                        비밀번호를 5회 이상 틀렸나요?
+                    </h3>
+                    <p class="text-sm text-gray-600 mb-4">
+                        계정이 잠겼다면 아래 버튼을 눌러 선생님께 카카오톡으로 잠금 해제를 요청하세요.
+                    </p>
+                    <button onclick="handleKakaoRequest()" class="w-full bg-[#FEE500] hover:bg-[#FADA0A] text-[#371D1E] font-bold py-3 rounded-lg flex items-center justify-center transition duration-200">
+                        <i data-lucide="message-circle" class="w-5 h-5 mr-2"></i>
+                        카카오톡 오픈채팅으로 요청하기
+                    </button>
+                    
+                    <div class="mt-4 p-3 bg-gray-100 rounded-lg text-sm text-left">
+                        <p class="text-gray-600 text-xs mb-2 font-medium">※ 오픈채팅방에 보낼 양식을 미리 복사해두면 편리합니다.</p>
+                        <button onclick="handleCopyRequest()" class="w-full bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 py-2 rounded transition text-sm font-medium">
+                            📝 요청 내용 복사하기
+                        </button>
+                        <p class="text-gray-500 text-[11px] mt-2">정보를 복사한 후, 오픈채팅방에 붙여넣기 해서 보내주세요.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 스크립트 로직 -->
+    <script>
+        // 📝 [선생님 설정 영역] 
+        const KAKAO_CHAT_URL = "https://open.kakao.com/o/seUkHpui"; 
+        const GOOGLE_SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSYCjWJ502PlwxCFocvTEqWOfy70jfIuKjqFPGegjBhhpBjAV6xvKLuqFrLw3Rp_EaFcVJo1hGgfXn8/pub?output=csv"; 
+
+        // 전역 변수
+        let studentDataList = [];
+        let currentFoundStudent = null;
+
+        // 아이콘 렌더링
+        lucide.createIcons();
+
+        // 1. 스프레드시트 데이터 불러오기
+        async function fetchStudentData() {
+            try {
+                const response = await fetch(GOOGLE_SHEET_CSV_URL);
+                if (!response.ok) throw new Error("네트워크 응답 오류");
+                
+                const csvText = await response.text();
+                const lines = csvText.split('\n');
+                const parsedData = [];
+                
+                for (let i = 1; i < lines.length; i++) {
+                    const line = lines[i];
+                    if (!line.trim()) continue;
+                    
+                    const row = line.split(',').map(item => item.replace(/^"|"$/g, '').trim());
+                    
+                    if (row.length >= 5) {
+                        parsedData.push({
+                            grade: row[0],
+                            classNum: row[1],
+                            studentNum: row[2],
+                            name: row[3],
+                            id: row[4]
+                        });
+                    }
+                }
+                
+                studentDataList = parsedData;
+                
+                // UI 업데이트
+                document.getElementById('loadingScreen').classList.add('hidden');
+                document.getElementById('mainApp').classList.remove('hidden');
+                document.getElementById('studentCount').innerText = studentDataList.length;
+
+            } catch (error) {
+                console.error("데이터 로딩 실패:", error);
+                document.getElementById('loadingScreen').classList.add('hidden');
+                document.getElementById('errorScreen').classList.remove('hidden');
+            }
+        }
+
+        // 2. 폼 제출(검색) 처리
+        document.getElementById('searchForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const grade = document.getElementById('inputGrade').value;
+            const classNum = document.getElementById('inputClassNum').value;
+            const studentNum = document.getElementById('inputStudentNum').value;
+            const name = document.getElementById('inputName').value.trim();
+
+            const foundStudent = studentDataList.find(student => 
+                student.grade === grade &&
+                student.classNum === classNum &&
+                student.studentNum === studentNum &&
+                student.name === name
+            );
+
+            // 초기화
+            document.getElementById('resultNotFound').classList.add('hidden');
+            document.getElementById('resultFound').classList.add('hidden');
+
+            if (foundStudent) {
+                currentFoundStudent = foundStudent;
+                document.getElementById('resName').innerText = foundStudent.name;
+                document.getElementById('resId').innerText = foundStudent.id;
+                document.getElementById('resultFound').classList.remove('hidden');
+            } else {
+                currentFoundStudent = null;
+                document.getElementById('resultNotFound').classList.remove('hidden');
+            }
+        });
+
+        // 3. 카카오 오픈채팅 열기
+        function handleKakaoRequest() {
+            window.open(KAKAO_CHAT_URL, '_blank');
+        }
+
+        // 4. 요청 내용 복사 기능
+        function handleCopyRequest() {
+            if (!currentFoundStudent) return;
+            
+            const bodyText = `선생님, 안녕하세요.\n\n제 전남아이모두 계정이 잠겼습니다. 비밀번호 초기화를 요청합니다.\n\n- 학번: ${currentFoundStudent.grade}학년 ${currentFoundStudent.classNum}반 ${currentFoundStudent.studentNum}번\n- 이름: ${currentFoundStudent.name}\n- 아이디: ${currentFoundStudent.id}\n\n감사합니다.`;
+            
+            try {
+                const textArea = document.createElement("textarea");
+                textArea.value = bodyText;
+                document.body.appendChild(textArea);
+                textArea.select();
+                document.execCommand("copy");
+                document.body.removeChild(textArea);
+                alert(`요청 내용이 복사되었습니다. 카카오톡 채팅방에 붙여넣기 해주세요.`);
+            } catch (err) {
+                alert('복사에 실패했습니다.');
+            }
+        }
+
+        // 페이지 로드 시 데이터 가져오기 실행
+        fetchStudentData();
+
+    </script>
+</body>
+</html>
